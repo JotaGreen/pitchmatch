@@ -3,37 +3,32 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Polyphonic MIDI Piano Keyboard with Color and Sound</title>
+    <title>Polyphonic MIDI Piano Keyboard with Pitch Practice</title>
     <!-- Tailwind CSS for styling -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Tone.js for audio -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
     <style>
-        /* Custom styles for the piano keyboard */
+        /* Custom styles for the piano keyboard and practice section */
         body {
-            /* Use a default system font stack for better performance and no external dependencies */
             font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
-            /* Prevent body scrolling while scrolling the piano */
             overflow: hidden;
-            /* Prevent text selection on the piano keys */
             user-select: none;
             -webkit-user-select: none;
         }
 
         #piano-container {
-            /* Enable horizontal scrolling for the piano */
             overflow-x: auto;
-            /* Hide scrollbar for a cleaner look */
-            -ms-overflow-style: none;  /* IE and Edge */
-            scrollbar-width: none;  /* Firefox */
+            -ms-overflow-style: none;
+            scrollbar-width: none;
         }
         #piano-container::-webkit-scrollbar {
-            display: none; /* Chrome, Safari, and Opera */
+            display: none;
         }
 
         #notes-container {
-            display: inline-flex; /* Use inline-flex to allow the container to size to its content */
-            align-items: flex-start; /* Align keys to the top */
+            display: inline-flex;
+            align-items: flex-start;
             padding: 2rem 1rem;
             background-color: #1a202c;
             border-radius: 0.75rem;
@@ -52,7 +47,6 @@
         }
         
         .key.pressed, .key:active {
-            /* Make the key look pressed */
             filter: brightness(1.3);
         }
 
@@ -70,7 +64,6 @@
             height: 130px;
             border-radius: 0 0 4px 4px;
             z-index: 10;
-            /* The negative margin trick pulls the black key over the white keys */
             margin-left: -15px;
             margin-right: -15px;
             box-shadow: inset 0 -8px 5px rgba(0,0,0,0.5), 0 3px 5px rgba(0,0,0,0.5);
@@ -82,30 +75,53 @@
             font-weight: 600;
             color: white;
             text-shadow: 1px 1px 3px rgba(0,0,0,0.7);
-            /* Prevent the label from interfering with click events on the key */
             pointer-events: none;
         }
     </style>
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 flex flex-col h-screen">
 
-    <div class="container mx-auto p-4 md:p-8 text-center">
-        <h1 class="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white">Polyphonic MIDI Piano Keyboard</h1>
-        <p class="text-md text-gray-600 dark:text-gray-400 mt-2">A colored piano keyboard from C1 to C8. Press and hold to play chords.</p>
+    <!-- Main container for the app -->
+    <div id="app-container" class="hidden flex-col h-full">
+        <header class="container mx-auto p-4 text-center">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white">Pitch Matching Practice</h1>
+            <p class="text-md text-gray-600 dark:text-gray-400 mt-2">Listen to the random pitch, find it on the keyboard, then reveal the answer.</p>
+        </header>
+
+        <!-- Pitch Practice Controls -->
+        <section id="practice-section" class="container mx-auto p-4 bg-gray-200 dark:bg-gray-800 rounded-lg shadow-md mb-4">
+            <div class="flex flex-wrap items-center justify-center gap-4">
+                <!-- Buttons -->
+                <button id="play-random-pitch-btn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition-transform transform hover:scale-105">Play Random Pitch</button>
+                <button id="reveal-pitch-btn" class="bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 px-4 rounded-lg transition-transform transform hover:scale-105">Reveal Pitch</button>
+                
+                <!-- Dropdowns -->
+                <div class="flex items-center gap-2">
+                    <label for="min-pitch-select" class="font-semibold">Min:</label>
+                    <select id="min-pitch-select" class="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md p-2"></select>
+                </div>
+                <div class="flex items-center gap-2">
+                    <label for="max-pitch-select" class="font-semibold">Max:</label>
+                    <select id="max-pitch-select" class="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md p-2"></select>
+                </div>
+            </div>
+            <div id="reveal-message" class="text-center mt-4 text-xl font-bold text-blue-500 hidden"></div>
+        </section>
+
+        <!-- Piano Container -->
+        <!-- SCROLL FIX: Removed 'justify-center' to allow full scrolling from left to right -->
+        <div id="piano-container" class="w-full flex-grow flex items-center">
+            <div id="notes-container">
+                <!-- Piano keys will be dynamically generated here -->
+            </div>
+        </div>
     </div>
     
-    <!-- Start button to initialize audio context -->
+    <!-- Start Screen -->
     <div id="start-screen" class="flex-grow flex items-center justify-center">
         <button id="start-button" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-4 px-8 rounded-lg shadow-lg transition-transform transform hover:scale-105 text-xl">
             Click to Start
         </button>
-    </div>
-    
-    <!-- Container for the piano keyboard (initially hidden) -->
-    <div id="piano-container" class="w-full hidden flex-grow items-center justify-center">
-        <div id="notes-container">
-            <!-- Piano keys will be dynamically generated and inserted here -->
-        </div>
     </div>
 
     <script type="module">
@@ -116,11 +132,25 @@
         import { getMidiNoteColor } from 'https://cdn.jsdelivr.net/gh/JotaGreen/keytap@main/midiColorConverter.js';
         console.log("Successfully imported getMidiNoteColor function.");
 
-        /**
-         * Converts a MIDI note number to its standard pitch name (e.g., 60 -> "C4").
-         * @param {number} midiNote - The MIDI note number (0-127).
-         * @returns {string} The name of the pitch (e.g., "A#4").
-         */
+        // --- DOM Elements ---
+        const startButton = document.getElementById('start-button');
+        const startScreen = document.getElementById('start-screen');
+        const appContainer = document.getElementById('app-container');
+        const pianoContainer = document.getElementById('piano-container');
+        const notesContainer = document.getElementById('notes-container');
+        const playRandomPitchBtn = document.getElementById('play-random-pitch-btn');
+        const revealPitchBtn = document.getElementById('reveal-pitch-btn');
+        const revealMessage = document.getElementById('reveal-message');
+        const minPitchSelect = document.getElementById('min-pitch-select');
+        const maxPitchSelect = document.getElementById('max-pitch-select');
+
+        // --- State Variables ---
+        let synth;
+        let currentRandomMidiNote = null;
+        const minMidi = 24; // C1
+        const maxMidi = 108; // C8
+
+        // --- Utility Functions ---
         function midiToPitchName(midiNote) {
             const noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
             const octave = Math.floor(midiNote / 12) - 1;
@@ -128,48 +158,104 @@
             return `${noteNames[noteIndex]}${octave}`;
         }
 
-        const startButton = document.getElementById('start-button');
-        const pianoContainer = document.getElementById('piano-container');
-        const notesContainer = document.getElementById('notes-container');
-        const startScreen = document.getElementById('start-screen');
-
-        let synth;
-
-        // Event listener for the start button
+        // --- App Initialization ---
         startButton.addEventListener('click', async () => {
-            console.log("Start button clicked. Initializing audio.");
+            console.log("Start button clicked. Initializing audio and app.");
             try {
                 await Tone.start();
                 console.log("AudioContext started successfully.");
-                
-                // --- KEY CHANGE: Use PolySynth for multiple notes ---
-                // This creates a synth that can play multiple notes at once.
-                // It manages a pool of Tone.Synth instances.
                 synth = new Tone.PolySynth(Tone.Synth).toDestination();
                 console.log("Tone.PolySynth initialized.");
                 
                 startScreen.classList.add('hidden');
-                pianoContainer.classList.remove('hidden');
-                pianoContainer.classList.add('flex');
+                appContainer.classList.remove('hidden');
+                appContainer.classList.add('flex');
 
+                populatePitchSelectors();
                 generatePianoKeys();
+                setNewRandomNote();
+
             } catch (error) {
                 console.error("Error starting Tone.js:", error);
-                alert("Could not initialize audio. Please refresh the page and try again.");
+                // A simple error message for the user without using alert()
+                appContainer.innerHTML = `<div class="text-center text-red-500">Failed to initialize audio. Please refresh the page.</div>`;
+                appContainer.classList.remove('hidden');
+                appContainer.classList.add('flex');
             }
         });
 
+        // --- Pitch Practice Logic ---
+        function populatePitchSelectors() {
+            for (let midi = minMidi; midi <= maxMidi; midi++) {
+                const pitchName = midiToPitchName(midi);
+                const optionMin = new Option(pitchName, midi);
+                const optionMax = new Option(pitchName, midi);
+                minPitchSelect.add(optionMin);
+                maxPitchSelect.add(optionMax);
+            }
+            minPitchSelect.value = 48; // Default C3
+            maxPitchSelect.value = 72; // Default C5
+        }
+
+        function setNewRandomNote() {
+            const min = parseInt(minPitchSelect.value);
+            const max = parseInt(maxPitchSelect.value);
+            
+            // Generate a random integer between min and max (inclusive)
+            const randomMidi = Math.floor(Math.random() * (max - min + 1)) + min;
+            currentRandomMidiNote = randomMidi;
+            
+            console.log(`New random note set: ${midiToPitchName(currentRandomMidiNote)} (MIDI: ${currentRandomMidiNote})`);
+            
+            // Reset the UI
+            revealMessage.classList.add('hidden');
+            revealPitchBtn.textContent = 'Reveal Pitch';
+        }
+
+        playRandomPitchBtn.addEventListener('click', () => {
+            if (synth && currentRandomMidiNote !== null) {
+                const pitchName = midiToPitchName(currentRandomMidiNote);
+                console.log(`Playing random note: ${pitchName}`);
+                synth.triggerAttackRelease(pitchName, '1s');
+            }
+        });
+
+        revealPitchBtn.addEventListener('click', () => {
+            if (revealPitchBtn.textContent === 'Reveal Pitch') {
+                const pitchName = midiToPitchName(currentRandomMidiNote);
+                revealMessage.textContent = `The note was: ${pitchName}`;
+                revealMessage.classList.remove('hidden');
+                revealPitchBtn.textContent = 'New Pitch';
+            } else {
+                setNewRandomNote();
+            }
+        });
+
+        minPitchSelect.addEventListener('change', () => {
+            // Ensure min is not greater than max
+            if (parseInt(minPitchSelect.value) > parseInt(maxPitchSelect.value)) {
+                maxPitchSelect.value = minPitchSelect.value;
+            }
+            setNewRandomNote();
+        });
+
+        maxPitchSelect.addEventListener('change', () => {
+            // Ensure max is not less than min
+            if (parseInt(maxPitchSelect.value) < parseInt(minPitchSelect.value)) {
+                minPitchSelect.value = maxPitchSelect.value;
+            }
+            setNewRandomNote();
+        });
+
+        // --- Piano Key Generation ---
         function generatePianoKeys() {
             if (!notesContainer) {
                 console.error("Could not find the 'notes-container' element in the DOM.");
                 return;
             }
             
-            console.log("Found 'notes-container'. Starting to generate piano keys.");
+            console.log("Starting to generate piano keys.");
             
-            const minMidi = 24; // C1
-            const maxMidi = 108; // C8
-
             for (let midi = minMidi; midi <= maxMidi; midi++) {
                 const pitchName = midiToPitchName(midi);
                 const isBlackKey = pitchName.includes('#');
@@ -184,13 +270,9 @@
                 label.textContent = pitchName;
                 key.appendChild(label);
 
-                // --- Event Listeners for sustained, polyphonic notes ---
-
                 const playNote = (e) => {
                     e.preventDefault();
                     if (synth && !key.classList.contains('pressed')) {
-                        console.log(`Attack: ${pitchName}`);
-                        // triggerAttack is the same for PolySynth
                         synth.triggerAttack(pitchName);
                         key.classList.add('pressed');
                     }
@@ -198,20 +280,14 @@
 
                 const stopNote = () => {
                     if (synth && key.classList.contains('pressed')) {
-                        console.log(`Release: ${pitchName}`);
-                        // --- KEY CHANGE: Specify which note to release ---
-                        // This ensures only the key being released is silenced.
                         synth.triggerRelease(pitchName);
                         key.classList.remove('pressed');
                     }
                 };
                 
-                // Mouse events
                 key.addEventListener('mousedown', playNote);
                 key.addEventListener('mouseup', stopNote);
                 key.addEventListener('mouseleave', stopNote);
-
-                // Touch events
                 key.addEventListener('touchstart', playNote);
                 key.addEventListener('touchend', stopNote);
                 key.addEventListener('touchcancel', stopNote);
