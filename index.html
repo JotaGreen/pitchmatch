@@ -162,12 +162,20 @@
         const minMidi = 24; // C1
         const maxMidi = 108; // C8
 
-        // --- Instrument Definitions ---
+        // --- Instrument Definitions (Updated) ---
         const instruments = {
-            'synth': { name: 'Default Synth' },
-            'piano': { name: 'Piano', baseUrl: 'https://tonejs.github.io/audio/salamander/', notes: { 'A0': 'A0.mp3', 'C1': 'C1.mp3', 'D#1': 'Ds1.mp3', 'F#1': 'Fs1.mp3', 'A1': 'A1.mp3', 'C2': 'C2.mp3', 'D#2': 'Ds2.mp3', 'F#2': 'Fs2.mp3', 'A2': 'A2.mp3', 'C3': 'C3.mp3', 'D#3': 'Ds3.mp3', 'F#3': 'Fs3.mp3', 'A3': 'A3.mp3', 'C4': 'C4.mp3', 'D#4': 'Ds4.mp3', 'F#4': 'Fs4.mp3', 'A4': 'A4.mp3', 'C5': 'C5.mp3', 'D#5': 'Ds5.mp3', 'F#5': 'Fs5.mp3', 'A5': 'A5.mp3', 'C6': 'C6.mp3', 'D#6': 'Ds6.mp3', 'F#6': 'Fs6.mp3', 'A6': 'A6.mp3', 'C7': 'C7.mp3', 'D#7': 'Ds7.mp3', 'F#7': 'Fs7.mp3', 'A7': 'A7.mp3', 'C8': 'C8.mp3' } },
-            'guitar-acoustic': { name: 'Acoustic Guitar', baseUrl: 'https://tonejs.github.io/audio/guitar-acoustic/', notes: { 'A2': 'A2.mp3', 'A3': 'A3.mp3', 'A4': 'A4.mp3', 'C3': 'C3.mp3', 'C4': 'C4.mp3', 'C5': 'C5.mp3', 'E2': 'E2.mp3', 'E3': 'E3.mp3', 'E4': 'E4.mp3', 'G2': 'G2.mp3', 'G3': 'G3.mp3', 'G4': 'G4.mp3' } },
-            'violin': { name: 'Violin', baseUrl: 'https://tonejs.github.io/audio/violin/', notes: { 'A3': 'A3.mp3', 'A4': 'A4.mp3', 'A5': 'A5.mp3', 'C4': 'C4.mp3', 'C5': 'C5.mp3', 'C6': 'C6.mp3', 'E4': 'E4.mp3', 'E5': 'E5.mp3', 'G3': 'G3.mp3', 'G4': 'G4.mp3', 'G5': 'G5.mp3' } }
+            'acoustic_grand_piano': { name: 'Acoustic Grand Piano' },
+            'electric_piano_2': { name: 'Electric Piano' },
+            'harmonica': { name: 'Harmonica' },
+            'acoustic_guitar_nylon': { name: 'Nylon Guitar' },
+            'electric_guitar_clean': { name: 'Electric Guitar' },
+            'electric_bass_finger': { name: 'Bass Guitar' },
+            'violin': { name: 'Violin' },
+            'voice_oohs': { name: 'Voice Oohs' },
+            'tenor_sax': { name: 'Tenor Sax' },
+            'flute': { name: 'Flute' },
+            'trumpet': { name: 'Trumpet' },
+            'trombone': { name: 'Trombone' }
         };
 
         // --- Utility Functions ---
@@ -178,6 +186,27 @@
             return `${noteNames[noteIndex]}${octave}`;
         }
 
+        /**
+         * Converts a pitch name with a sharp to its flat equivalent for the soundfont URL.
+         * Example: "C#4" becomes "Db4"
+         * @param {string} pitchName - The name of the pitch (e.g., "A#3").
+         * @returns {string} The filename-compatible pitch name.
+         */
+        function pitchNameToFileName(pitchName) {
+            if (pitchName.includes('#')) {
+                const note = pitchName.charAt(0);
+                const octave = parseInt(pitchName.slice(2));
+                switch (note) {
+                    case 'C': return `Db${octave}`;
+                    case 'D': return `Eb${octave}`;
+                    case 'F': return `Gb${octave}`;
+                    case 'G': return `Ab${octave}`;
+                    case 'A': return `Bb${octave}`;
+                }
+            }
+            return pitchName;
+        }
+
         function setLoading(isLoading) {
             loadingMessage.classList.toggle('hidden', !isLoading);
             playRandomPitchBtn.disabled = isLoading;
@@ -185,21 +214,29 @@
             document.querySelectorAll('.key').forEach(k => k.classList.toggle('disabled', isLoading));
         }
 
-        // --- Instrument Loading (Refactored and Fixed) ---
+        // --- Instrument Loading (Updated) ---
         function loadInstrument(instrumentKey) {
-            const instrumentData = instruments[instrumentKey];
-            if (!instrumentData.baseUrl) {
-                console.log("Creating default PolySynth.");
-                return Promise.resolve(new Tone.PolySynth(Tone.Synth).toDestination());
+            console.log(`Creating sampler for ${instrumentKey}`);
+            const baseUrl = `https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM/${instrumentKey}-mp3/`;
+            
+            // Dynamically generate the list of notes for the sampler
+            const urls = {};
+            // We only need to provide a subset of notes; Tone.Sampler will pitch-shift the rest.
+            // Let's load every C and F# for a good range.
+            for (let i = minMidi; i <= maxMidi; i++) {
+                const pitch = midiToPitchName(i);
+                if (pitch.startsWith('C') || pitch.startsWith('F#')) {
+                    const fileName = pitchNameToFileName(pitch);
+                    urls[pitch] = `${fileName}.mp3`;
+                }
             }
-
-            console.log(`Creating sampler for ${instrumentData.name}`);
+            
             return new Promise((resolve, reject) => {
                 const sampler = new Tone.Sampler({
-                    urls: instrumentData.notes,
-                    baseUrl: instrumentData.baseUrl,
+                    urls: urls,
+                    baseUrl: baseUrl,
                     onload: () => {
-                        console.log(`✅ ${instrumentData.name} samples loaded successfully.`);
+                        console.log(`✅ ${instruments[instrumentKey].name} samples loaded successfully.`);
                         resolve(sampler.toDestination());
                     },
                     onerror: (error) => {
@@ -265,7 +302,6 @@
                 populatePitchSelectors();
                 generatePianoKeys();
                 
-                // Load default instruments sequentially to avoid race conditions
                 await changeKeysInstrument(keysInstrumentSelect.value);
                 await changeRandomInstrument(randomInstrumentSelect.value);
 
@@ -274,7 +310,6 @@
             } catch (error) {
                 console.error("Error starting app:", error);
                 appContainer.innerHTML = `<div class="text-center text-red-500">Failed to initialize. Please refresh the page.</div>`;
-                appContainer.classList.remove('hidden');
             }
         });
         
@@ -284,8 +319,8 @@
                 randomInstrumentSelect.add(new Option(instruments[key].name, key));
             }
             randomInstrumentSelect.add(new Option("Random", "random"));
-            keysInstrumentSelect.value = 'piano';
-            randomInstrumentSelect.value = 'piano';
+            keysInstrumentSelect.value = 'acoustic_grand_piano';
+            randomInstrumentSelect.value = 'acoustic_grand_piano';
         }
 
         // --- Pitch Practice Logic ---
@@ -311,7 +346,7 @@
         playRandomPitchBtn.addEventListener('click', async () => {
             if (currentRandomMidiNote === null) return;
 
-            let instrumentToPlay = randomPitchInstrument;
+            let instrumentToPlay;
             let shouldDispose = false;
 
             if (randomInstrumentSelect.value === 'random') {
@@ -320,11 +355,13 @@
                 setLoading(true);
                 instrumentToPlay = await loadInstrument(randomKey);
                 shouldDispose = true; 
+            } else {
+                 instrumentToPlay = randomPitchInstrument;
             }
             
             if (instrumentToPlay) {
                 const pitchName = midiToPitchName(currentRandomMidiNote);
-                console.log(`Playing random note: ${pitchName} with ${instrumentToPlay.toString()}`);
+                console.log(`Playing random note: ${pitchName} with instrument`);
                 instrumentToPlay.triggerAttackRelease(pitchName, '1s');
             }
             
