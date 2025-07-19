@@ -30,10 +30,8 @@
             display: inline-flex;
             align-items: flex-start;
             padding: 2rem 1rem;
-            background-color: #1a202c;
             border-radius: 0.75rem;
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-            border: 2px solid #4a5568;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
         }
 
         .key {
@@ -58,7 +56,7 @@
         .white-key {
             width: 50px;
             height: 220px;
-            border: 1px solid #4a5568;
+            border: 1px solid #9ca3af;
             border-radius: 0 0 6px 6px;
             box-shadow: inset 0 1px 5px rgba(255, 255, 255, 0.1), 0 5px 8px rgba(0,0,0,0.4);
             padding-bottom: 0.5rem;
@@ -72,7 +70,6 @@
             margin-left: -15px;
             margin-right: -15px;
             box-shadow: inset 0 -8px 5px rgba(0,0,0,0.5), 0 3px 5px rgba(0,0,0,0.5);
-            padding-bottom: 0.5rem;
         }
 
         .key-label {
@@ -84,7 +81,7 @@
         }
     </style>
 </head>
-<body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 flex flex-col h-screen">
+<body class="bg-white dark:bg-black text-gray-800 dark:text-gray-200 flex flex-col h-screen">
 
     <!-- Main container for the app -->
     <div id="app-container" class="hidden flex-col h-full">
@@ -94,11 +91,11 @@
         </header>
 
         <!-- Pitch Practice Controls -->
-        <section id="practice-section" class="container mx-auto p-4 bg-gray-200 dark:bg-gray-800 rounded-lg shadow-md mb-4">
+        <section id="practice-section" class="container mx-auto p-4 bg-gray-100 dark:bg-gray-900 rounded-lg shadow-md mb-4">
             <div class="flex flex-wrap items-center justify-center gap-4">
                 <!-- Buttons -->
-                <button id="play-secret-pitch-btn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition-transform transform hover:scale-105">Play Secret Pitch</button>
-                <button id="reveal-pitch-btn" class="bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 px-4 rounded-lg transition-transform transform hover:scale-105">Reveal Secret Pitch</button>
+                <button id="play-secret-pitch-btn" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition-transform transform hover:scale-105">Play Secret Pitch</button>
+                <button id="reveal-pitch-btn" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition-transform transform hover:scale-105">Reveal Secret Pitch</button>
                 
                 <!-- Dropdowns -->
                 <div class="flex items-center gap-2">
@@ -116,15 +113,15 @@
 
         <!-- Piano Container -->
         <div id="piano-container" class="w-full flex-grow flex items-center">
-            <div id="notes-container">
+            <div id="notes-container" class="bg-gray-200 dark:bg-gray-800 border border-gray-300 dark:border-gray-600">
                 <!-- Piano keys will be dynamically generated here -->
             </div>
         </div>
         
-        <!-- Settings Button -->
-        <div class="text-center p-4">
+        <!-- Footer with Settings Button -->
+        <footer class="text-center p-4">
             <button id="settings-btn" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg">Settings</button>
-        </div>
+        </footer>
     </div>
     
     <!-- Settings Modal -->
@@ -139,6 +136,14 @@
                 <div class="flex items-center justify-between">
                     <label for="max-pitch-select" class="font-semibold">Max Pitch:</label>
                     <select id="max-pitch-select" class="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md p-2 w-1/2"></select>
+                </div>
+                 <div class="flex items-center justify-between">
+                    <label for="theme-select" class="font-semibold">Theme:</label>
+                    <select id="theme-select" class="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md p-2 w-1/2">
+                        <option value="auto">Auto</option>
+                        <option value="light">Light</option>
+                        <option value="dark">Dark</option>
+                    </select>
                 </div>
             </div>
             <div class="text-center mt-8">
@@ -175,10 +180,11 @@
         const closeSettingsBtn = document.getElementById('close-settings-btn');
         const minPitchSelect = document.getElementById('min-pitch-select');
         const maxPitchSelect = document.getElementById('max-pitch-select');
+        const themeSelect = document.getElementById('theme-select');
 
         // --- State Variables ---
         let keysInstrument, secretPitchInstrument, activeSecretInstrument;
-        let tempRandomInstrument = null; // To hold the randomly chosen instrument
+        let tempRandomInstrument = null;
         let currentSecretMidiNote = null;
         let minMidi, maxMidi;
 
@@ -228,7 +234,7 @@
             console.log(`Creating sampler for ${instrumentKey}`);
             const baseUrl = `https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM/${instrumentKey}-mp3/`;
             const urls = {};
-            for (let i = 24; i <= 108; i++) { // Load samples for the entire possible range
+            for (let i = 24; i <= 108; i++) {
                 const pitch = midiToPitchName(i);
                 if (pitch.startsWith('C') || pitch.startsWith('F#') || pitch.startsWith('A')) {
                     urls[pitch] = `${pitchNameToFileName(pitch)}.mp3`;
@@ -266,7 +272,9 @@
                 } catch (error) { console.error("Failed to change secret instrument:", error); }
                  finally { setLoading(false); }
             } else {
-                activeSecretInstrument = null; // Will be loaded on new secret note
+                 if (tempRandomInstrument) tempRandomInstrument.dispose();
+                 tempRandomInstrument = null;
+                 activeSecretInstrument = null; 
             }
         }
 
@@ -278,6 +286,7 @@
                 startScreen.classList.add('hidden');
                 appContainer.classList.remove('hidden');
                 appContainer.classList.add('flex');
+                applyTheme(themeSelect.value); // Apply initial theme
                 populateInstrumentSelectors();
                 populatePitchSelectors();
                 await updateSettingsAndKeyboard();
@@ -294,7 +303,6 @@
             
             generatePianoKeys(minMidi, maxMidi);
             
-            // Load instruments if they don't exist
             if (!keysInstrument) await changeKeysInstrument(keysInstrumentSelect.value);
             if (!secretPitchInstrument && secretInstrumentSelect.value !== 'random') {
                  await changeSecretInstrument(secretInstrumentSelect.value);
@@ -314,13 +322,27 @@
         }
 
         function populatePitchSelectors() {
-            for (let i = 24; i <= 108; i++) { // Full range for selectors
+            for (let i = 24; i <= 108; i++) {
                 const pitchName = midiToPitchName(i);
                 minPitchSelect.add(new Option(pitchName, i));
                 maxPitchSelect.add(new Option(pitchName, i));
             }
             minPitchSelect.value = 36; // C2
             maxPitchSelect.value = 84; // C6
+        }
+
+        function applyTheme(theme) {
+            if (theme === 'dark') {
+                document.documentElement.classList.add('dark');
+            } else if (theme === 'light') {
+                document.documentElement.classList.remove('dark');
+            } else { // Auto
+                if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                    document.documentElement.classList.add('dark');
+                } else {
+                    document.documentElement.classList.remove('dark');
+                }
+            }
         }
 
         // --- Pitch Practice Logic ---
@@ -347,22 +369,22 @@
         }
 
         // --- Event Listeners ---
-        const playNote = () => {
+        const playSecretNote = () => {
             if (activeSecretInstrument) {
                 activeSecretInstrument.triggerAttack(midiToPitchName(currentSecretMidiNote));
             }
         };
-        const stopNote = () => {
+        const stopSecretNote = () => {
             if (activeSecretInstrument) {
                 activeSecretInstrument.triggerRelease(midiToPitchName(currentSecretMidiNote));
             }
         };
         
-        playSecretPitchBtn.addEventListener('mousedown', playNote);
-        playSecretPitchBtn.addEventListener('mouseup', stopNote);
-        playSecretPitchBtn.addEventListener('mouseleave', stopNote);
-        playSecretPitchBtn.addEventListener('touchstart', (e) => { e.preventDefault(); playNote(); });
-        playSecretPitchBtn.addEventListener('touchend', stopNote);
+        playSecretPitchBtn.addEventListener('mousedown', playSecretNote);
+        playSecretPitchBtn.addEventListener('mouseup', stopSecretNote);
+        playSecretPitchBtn.addEventListener('mouseleave', stopSecretNote);
+        playSecretPitchBtn.addEventListener('touchstart', (e) => { e.preventDefault(); playSecretNote(); });
+        playSecretPitchBtn.addEventListener('touchend', stopSecretNote);
 
         revealPitchBtn.addEventListener('click', () => {
             if (revealPitchBtn.textContent.includes('Reveal')) {
@@ -375,15 +397,14 @@
         });
         
         keysInstrumentSelect.addEventListener('change', (e) => changeKeysInstrument(e.target.value));
-        secretInstrumentSelect.addEventListener('change', (e) => {
-            changeSecretInstrument(e.target.value).then(setNewSecretNote);
-        });
+        secretInstrumentSelect.addEventListener('change', (e) => changeSecretInstrument(e.target.value));
 
         settingsBtn.addEventListener('click', () => settingsModal.classList.remove('hidden'));
         closeSettingsBtn.addEventListener('click', () => {
             settingsModal.classList.add('hidden');
             updateSettingsAndKeyboard();
         });
+        themeSelect.addEventListener('change', (e) => applyTheme(e.target.value));
 
         // --- Piano Key Generation ---
         function generatePianoKeys(minKey, maxKey) {
