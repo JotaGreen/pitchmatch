@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Polyphonic MIDI Piano Keyboard with Pitch Practice</title>
+    <title>Pitch Matching Practice</title>
     <!-- Tailwind CSS for styling -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Tone.js for audio -->
@@ -137,7 +137,7 @@
                     <select id="max-pitch-select" class="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md p-2 w-1/2"></select>
                 </div>
                  <div class="flex items-center justify-between">
-                    <label for="theme-select" class="font-semibold">Theme:</label>
+                    <label for="theme-select" class="font-semibold">Light/Dark:</label>
                     <select id="theme-select" class="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md p-2 w-1/2">
                         <option value="auto">Auto</option>
                         <option value="light">Light</option>
@@ -148,7 +148,7 @@
         </div>
 
         <button id="start-button" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-4 px-8 rounded-lg shadow-lg transition-transform transform hover:scale-105 text-xl">
-            Click to Start
+            Start
         </button>
     </div>
 
@@ -180,7 +180,7 @@
 
         // --- Instrument Definitions ---
         const instruments = {
-            'acoustic_grand_piano': { name: 'Acoustic Grand Piano' },
+            'acoustic_grand_piano': { name: 'Acoustic Piano' },
             'electric_piano_2': { name: 'Electric Piano' },
             'harmonica': { name: 'Harmonica' },
             'acoustic_guitar_nylon': { name: 'Nylon Guitar' },
@@ -297,7 +297,7 @@
                 secretInstrumentSelect.add(new Option(instruments[key].name, key));
             }
             secretInstrumentSelect.add(new Option("Random", "random"));
-            keysInstrumentSelect.value = 'acoustic_grand_piano';
+            keysInstrumentSelect.value = 'acoustic_guitar_nylon';
             secretInstrumentSelect.value = 'acoustic_grand_piano';
         }
 
