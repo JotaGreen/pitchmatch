@@ -4,10 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pitch Matching Practice</title>
-    <!-- Tailwind CSS for styling -->
-    <script src="https://cdn.tailwindcss.com"></script>
     <!-- Tone.js for audio -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FIX: Configure Tailwind to use the 'class' strategy for dark mode -->
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+        }
+    </script>
     <style>
         /* Custom styles for the piano keyboard and practice section */
         body {
@@ -312,11 +318,9 @@
             maxPitchSelect.value = 84; // C6
         }
         
-        // FIX: Consolidated and improved theme management logic
         // --- Theme Management ---
         function applyTheme(theme) {
             console.log(`Applying theme: '${theme}'`);
-            // Update the dropdown to reflect the current setting first
             themeSelect.value = theme;
 
             if (theme === 'dark') {
@@ -324,37 +328,46 @@
             } else if (theme === 'light') {
                 document.documentElement.classList.remove('dark');
             } else { // 'auto'
+                // Check the system preference and apply the theme accordingly
                 if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
                     document.documentElement.classList.add('dark');
                 } else {
                     document.documentElement.classList.remove('dark');
                 }
             }
-            console.log(`Theme applied. HTML classes: '${document.documentElement.className}'`);
+             console.log(`Theme applied. HTML class: '${document.documentElement.className}'`);
         }
 
-        // Listen for changes on the dropdown
+        // Listen for changes on the theme dropdown selector
         themeSelect.addEventListener('change', (e) => {
             const selectedTheme = e.target.value;
+            console.log(`Theme changed by user to: ${selectedTheme}`);
             localStorage.setItem('theme', selectedTheme);
             applyTheme(selectedTheme);
         });
 
-        // Listen for changes in the user's system theme preference for 'auto' mode
+        // Listen for changes in the OS theme preference
         window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
             const currentSetting = localStorage.getItem('theme') || 'auto';
-            console.log(`System theme changed. Current setting is '${currentSetting}'.`);
+            console.log(`System theme changed. Current app setting is '${currentSetting}'.`);
+            // Only update the theme if the user has selected 'auto'
             if (currentSetting === 'auto') {
-                // Re-apply the 'auto' theme to reflect the system change
+                console.log("Applying 'auto' theme to match system change.");
                 applyTheme('auto');
             }
         });
         
-        // Initial setup on script load
-        populateInstrumentSelectors();
-        populatePitchSelectors();
-        const savedTheme = localStorage.getItem('theme') || 'auto';
-        applyTheme(savedTheme); // Apply the theme on initial load
+        // --- Initial Script Load ---
+        function initialize() {
+            console.log("Initializing settings...");
+            populateInstrumentSelectors();
+            populatePitchSelectors();
+            const savedTheme = localStorage.getItem('theme') || 'auto';
+            applyTheme(savedTheme);
+            console.log("Initialization complete.");
+        }
+        
+        initialize(); // Run all setup functions
 
         // --- Pitch Practice Logic ---
         async function setNewSecretNote() {
@@ -409,10 +422,8 @@
         keysInstrumentSelect.addEventListener('change', (e) => changeKeysInstrument(e.target.value));
         secretInstrumentSelect.addEventListener('change', (e) => changeSecretInstrument(e.target.value));
 
-        // FIX: Add a global listener to robustly handle pointer release events.
         window.addEventListener('pointerup', () => {
             if (isPointerDown) {
-                console.log("Global pointer up event detected, releasing any pressed key.");
                 isPointerDown = false;
                 const pressedKey = notesContainer.querySelector('.key.pressed');
                 if (pressedKey) {
@@ -454,14 +465,12 @@
                     if (currentlyPressed && currentlyPressed !== key) {
                         if (keysInstrument) {
                             const oldPitch = currentlyPressed.querySelector('.key-label').textContent;
-                            console.log(`Releasing previous key: ${oldPitch}`);
                             keysInstrument.triggerRelease(oldPitch);
                             currentlyPressed.classList.remove('pressed');
                         }
                     }
                     
                     if (keysInstrument && !key.classList.contains('pressed') && !key.classList.contains('disabled')) {
-                        console.log(`Attacking key: ${pitchName}`);
                         keysInstrument.triggerAttack(pitchName);
                         key.classList.add('pressed');
                     }
@@ -469,7 +478,6 @@
 
                 const release = () => {
                     if (keysInstrument && key.classList.contains('pressed')) {
-                        console.log(`Releasing key: ${pitchName}`);
                         keysInstrument.triggerRelease(pitchName);
                         key.classList.remove('pressed');
                     }
@@ -482,14 +490,12 @@
 
                 key.addEventListener('pointerenter', (e) => {
                     if (isPointerDown) {
-                        console.log(`Pointer entered ${pitchName} while down.`);
                         attack(e);
                     }
                 });
 
                 key.addEventListener('pointerleave', () => {
                     if (isPointerDown) {
-                        console.log(`Pointer left ${pitchName} while down.`);
                         release();
                     }
                 });
