@@ -44,7 +44,8 @@
             transition: filter 0.1s ease-in-out, opacity 0.2s;
         }
         
-        .key.pressed, .key:active {
+        /* IMPROVEMENT: Removed the :active pseudo-class to give JS full control over the highlight state. */
+        .key.pressed {
             filter: brightness(1.3);
         }
         
@@ -177,6 +178,8 @@
         let tempRandomInstrument = null;
         let currentSecretMidiNote = null;
         let minMidi, maxMidi;
+        // FIX: Tracks mouse/touch state globally for the piano to enable dragging.
+        let isPointerDown = false;
 
         // --- Instrument Definitions ---
         const instruments = {
@@ -389,10 +392,32 @@
             applyTheme(selectedTheme);
         });
 
+        // FIX: Add a global listener to robustly handle pointer release events.
+        // This prevents a key from getting "stuck" if the user releases the pointer outside the piano container.
+        window.addEventListener('pointerup', () => {
+            if (isPointerDown) {
+                console.log("Global pointer up event detected, releasing any pressed key.");
+                isPointerDown = false;
+                const pressedKey = notesContainer.querySelector('.key.pressed');
+                if (pressedKey) {
+                    const pitchName = pressedKey.querySelector('.key-label').textContent;
+                    if (keysInstrument) {
+                        keysInstrument.triggerRelease(pitchName);
+                        pressedKey.classList.remove('pressed');
+                    }
+                }
+            }
+        });
+
         // --- Piano Key Generation ---
+        // FIX: This function has been completely rewritten to use modern pointer events
+        // and a new logic model to fix the highlight bug and enable drag-to-play.
         function generatePianoKeys(minKey, maxKey) {
             console.log(`Generating keys from ${minKey} to ${maxKey}`);
             notesContainer.innerHTML = ''; // Clear previous keys
+            // Prevent the right-click menu on the piano for a smoother experience
+            notesContainer.addEventListener('contextmenu', e => e.preventDefault());
+
             for (let midi = minKey; midi <= maxKey; midi++) {
                 const pitchName = midiToPitchName(midi);
                 const isBlackKey = pitchName.includes('#');
@@ -407,26 +432,61 @@
                 label.textContent = pitchName;
                 key.appendChild(label);
 
-                const attack = (e) => {
-                    e.preventDefault();
+                // --- New event handling logic ---
+
+                const attack = (event) => {
+                    // Prevent default browser actions like scrolling on touch
+                    if (event.pointerType === 'touch') {
+                        event.preventDefault();
+                    }
+                    
+                    // Release any other key that is currently being played.
+                    // This ensures only one note plays at a time when dragging.
+                    const currentlyPressed = notesContainer.querySelector('.key.pressed');
+                    if (currentlyPressed && currentlyPressed !== key) {
+                        if (keysInstrument) {
+                            const oldPitch = currentlyPressed.querySelector('.key-label').textContent;
+                            console.log(`Releasing previous key: ${oldPitch}`);
+                            keysInstrument.triggerRelease(oldPitch);
+                            currentlyPressed.classList.remove('pressed');
+                        }
+                    }
+                    
+                    // Play the new note
                     if (keysInstrument && !key.classList.contains('pressed') && !key.classList.contains('disabled')) {
+                        console.log(`Attacking key: ${pitchName}`);
                         keysInstrument.triggerAttack(pitchName);
                         key.classList.add('pressed');
                     }
                 };
+
                 const release = () => {
                     if (keysInstrument && key.classList.contains('pressed')) {
+                        console.log(`Releasing key: ${pitchName}`);
                         keysInstrument.triggerRelease(pitchName);
                         key.classList.remove('pressed');
                     }
                 };
                 
-                key.addEventListener('mousedown', attack);
-                key.addEventListener('mouseup', release);
-                key.addEventListener('mouseleave', release);
-                key.addEventListener('touchstart', attack, { passive: false });
-                key.addEventListener('touchend', release);
-                key.addEventListener('touchcancel', release);
+                // Use pointer events to handle mouse, touch, and pen in a unified way.
+                key.addEventListener('pointerdown', (e) => {
+                    isPointerDown = true;
+                    attack(e);
+                });
+
+                key.addEventListener('pointerenter', (e) => {
+                    if (isPointerDown) {
+                        console.log(`Pointer entered ${pitchName} while down.`);
+                        attack(e);
+                    }
+                });
+
+                key.addEventListener('pointerleave', () => {
+                    if (isPointerDown) {
+                        console.log(`Pointer left ${pitchName} while down.`);
+                        release();
+                    }
+                });
 
                 notesContainer.appendChild(key);
             }
