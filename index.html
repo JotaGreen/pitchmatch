@@ -18,8 +18,8 @@
         /* Custom styles for the piano keyboard and practice section */
         body {
             font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
-            /* --- FIX: Allow vertical scrolling for small screens, but prevent horizontal body scroll --- */
-            overflow-y: hidden;
+            /* Allow vertical scrolling for small screens, but prevent horizontal body scroll */
+            overflow-y: auto;
             overflow-x: hidden;
             user-select: none;
             -webkit-user-select: none;
@@ -431,7 +431,16 @@
         keysInstrumentSelect.addEventListener('change', (e) => changeKeysInstrument(e.target.value));
         secretInstrumentSelect.addEventListener('change', (e) => changeSecretInstrument(e.target.value));
 
-        window.addEventListener('pointerup', () => {
+        window.addEventListener('pointerup', (e) => {
+            // --- FIX: This listener now also handles re-enabling vertical scroll ---
+            if (isDraggingScrollbar) {
+                isDraggingScrollbar = false;
+                scrollbarThumb.releasePointerCapture(e.pointerId); 
+                document.body.style.cursor = 'default';
+                // Re-enable vertical scrolling on the body
+                document.body.style.overflowY = 'auto';
+                console.log("Scrollbar drag ended, vertical scroll enabled.");
+            }
             if (isPointerDown) {
                 isPointerDown = false;
                 const pressedKey = notesContainer.querySelector('.key.pressed');
@@ -532,7 +541,6 @@
 
             const maxScrollLeft = scrollWidth - clientWidth;
             const maxThumbPosition = scrollbarContainer.clientWidth - thumbWidth;
-            // Prevent division by zero if maxScrollLeft is 0
             const thumbPosition = maxScrollLeft > 0 ? (pianoContainer.scrollLeft / maxScrollLeft) * maxThumbPosition : 0;
             scrollbarThumb.style.transform = `translateX(${thumbPosition}px)`;
         }
@@ -544,7 +552,9 @@
             initialScrollLeft = pianoContainer.scrollLeft; 
             scrollbarThumb.setPointerCapture(e.pointerId); 
             document.body.style.cursor = 'grabbing';
-            console.log("Scrollbar drag started.");
+            // --- FIX: Temporarily disable vertical scrolling on the body ---
+            document.body.style.overflowY = 'hidden';
+            console.log("Scrollbar drag started, vertical scroll disabled.");
         });
 
         window.addEventListener('pointermove', (e) => {
@@ -555,31 +565,19 @@
             const scrollWidth = pianoContainer.scrollWidth;
             const clientWidth = pianoContainer.clientWidth;
             
-            // This check prevents the piano from scrolling if it's not actually scrollable.
             if (scrollWidth <= clientWidth) return;
 
             const scrollDelta = dx * (scrollWidth / clientWidth);
             pianoContainer.scrollLeft = initialScrollLeft + scrollDelta;
         });
-
-        window.addEventListener('pointerup', (e) => {
-            if (isDraggingScrollbar) {
-                isDraggingScrollbar = false;
-                scrollbarThumb.releasePointerCapture(e.pointerId); 
-                document.body.style.cursor = 'default';
-                console.log("Scrollbar drag ended.");
-            }
-        });
         
-        // --- FIX: This is the key change ---
-        // Update the scrollbar thumb position whenever the piano is scrolled, for any reason.
-        // The faulty `if` condition has been removed.
+        // This listener is now handled by the main window pointerup event to reliably catch the end of a drag
+        // window.addEventListener('pointerup', ...);
+
         pianoContainer.addEventListener('scroll', () => {
-            console.log("Piano scrolled, updating thumb position.");
             updateScrollbar();
         });
 
-        // Use ResizeObserver to update the scrollbar when the container or content size changes
         new ResizeObserver(updateScrollbar).observe(pianoContainer);
         new ResizeObserver(updateScrollbar).observe(notesContainer);
 
