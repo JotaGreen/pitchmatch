@@ -18,12 +18,13 @@
         /* Custom styles for the piano keyboard and practice section */
         body {
             font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
-            overflow-y: auto; /* Prevent body scroll */
+            /* --- FIX: Allow vertical scrolling for small screens, but prevent horizontal body scroll --- */
+            overflow-y: auto;
+            overflow-x: hidden;
             user-select: none;
             -webkit-user-select: none;
         }
 
-        /* --- FIX: Keyboard Scroll Handling --- */
         #piano-container {
             overflow-x: hidden; /* Hide default scrollbar and prevent native scrolling */
             touch-action: none; /* Critical for mobile: Disables browser handling of touch gestures like panning, allowing our JS to handle key presses. */
@@ -32,7 +33,6 @@
         #scrollbar-thumb {
             min-width: 20px; /* Ensures the thumb is always grabbable, even with many keys */
         }
-        /* --- End of FIX --- */
 
         #notes-container {
             display: inline-flex;
@@ -118,8 +118,7 @@
             <button id="play-secret-pitch-btn" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 px-6 text-lg rounded-lg">Play Secret Pitch</button>
         </section>
 
-        <!-- --- FIX: New Keyboard Area Wrapper --- -->
-        <!-- This area now contains both the piano and the custom scrollbar -->
+        <!-- Keyboard Area Wrapper -->
         <div id="keyboard-area" class="w-full flex-grow flex flex-col justify-center px-4">
             <!-- Piano Container -->
             <div id="piano-container" class="w-full flex items-center">
@@ -132,7 +131,6 @@
                 <div id="scrollbar-thumb" class="h-full bg-gray-500 dark:bg-gray-400 rounded-full relative"></div>
             </div>
         </div>
-        <!-- --- End of FIX --- -->
     </div>
     
     <!-- Start Screen -->
@@ -188,7 +186,6 @@
         const minPitchSelect = document.getElementById('min-pitch-select');
         const maxPitchSelect = document.getElementById('max-pitch-select');
         const themeSelect = document.getElementById('theme-select');
-        // --- FIX: New scrollbar elements ---
         const pianoContainer = document.getElementById('piano-container');
         const scrollbarContainer = document.getElementById('scrollbar-container');
         const scrollbarThumb = document.getElementById('scrollbar-thumb');
@@ -199,7 +196,6 @@
         let currentSecretMidiNote = null;
         let minMidi, maxMidi;
         let isPointerDown = false;
-        // --- FIX: State for scrollbar dragging ---
         let isDraggingScrollbar = false;
         let scrollbarStartX = 0;
         let initialScrollLeft = 0;
@@ -515,56 +511,53 @@
 
                 notesContainer.appendChild(key);
             }
-            // --- FIX: Update scrollbar after keys are generated ---
-            // Use a short timeout to ensure the browser has rendered the keys and calculated their width.
             setTimeout(updateScrollbar, 0);
         }
 
-        // --- FIX: Custom Scrollbar Logic ---
+        // --- Custom Scrollbar Logic ---
         console.log("Setting up custom scrollbar logic.");
 
         function updateScrollbar() {
             const scrollWidth = pianoContainer.scrollWidth;
             const clientWidth = pianoContainer.clientWidth;
 
-            // Hide scrollbar if content doesn't overflow
             if (scrollWidth <= clientWidth) {
                 scrollbarContainer.style.display = 'none';
                 return;
             }
             scrollbarContainer.style.display = 'block';
 
-            // Calculate thumb width based on the ratio of visible content
             const thumbWidth = (clientWidth / scrollWidth) * scrollbarContainer.clientWidth;
             scrollbarThumb.style.width = `${thumbWidth}px`;
 
-            // Calculate thumb position
             const maxScrollLeft = scrollWidth - clientWidth;
             const maxThumbPosition = scrollbarContainer.clientWidth - thumbWidth;
-            const thumbPosition = (pianoContainer.scrollLeft / maxScrollLeft) * maxThumbPosition;
+            // Prevent division by zero if maxScrollLeft is 0
+            const thumbPosition = maxScrollLeft > 0 ? (pianoContainer.scrollLeft / maxScrollLeft) * maxThumbPosition : 0;
             scrollbarThumb.style.transform = `translateX(${thumbPosition}px)`;
-            console.log("Scrollbar updated.");
         }
 
         // --- Scrollbar Dragging Event Listeners ---
         scrollbarThumb.addEventListener('pointerdown', (e) => {
             isDraggingScrollbar = true;
-            scrollbarStartX = e.clientX; // Record starting X position of the pointer
-            initialScrollLeft = pianoContainer.scrollLeft; // Record initial scroll position
-            scrollbarThumb.setPointerCapture(e.pointerId); // Lock pointer events to the thumb
-            document.body.style.cursor = 'grabbing'; // Change cursor for visual feedback
+            scrollbarStartX = e.clientX; 
+            initialScrollLeft = pianoContainer.scrollLeft; 
+            scrollbarThumb.setPointerCapture(e.pointerId); 
+            document.body.style.cursor = 'grabbing';
             console.log("Scrollbar drag started.");
         });
 
         window.addEventListener('pointermove', (e) => {
             if (!isDraggingScrollbar) return;
-            e.preventDefault(); // Prevent text selection during drag
+            e.preventDefault(); 
 
-            const dx = e.clientX - scrollbarStartX; // How far the pointer has moved
+            const dx = e.clientX - scrollbarStartX; 
             const scrollWidth = pianoContainer.scrollWidth;
             const clientWidth = pianoContainer.clientWidth;
             
-            // Scale the pointer movement to the piano's scroll range
+            // This check prevents the piano from scrolling if it's not actually scrollable.
+            if (scrollWidth <= clientWidth) return;
+
             const scrollDelta = dx * (scrollWidth / clientWidth);
             pianoContainer.scrollLeft = initialScrollLeft + scrollDelta;
         });
@@ -572,20 +565,21 @@
         window.addEventListener('pointerup', (e) => {
             if (isDraggingScrollbar) {
                 isDraggingScrollbar = false;
-                scrollbarThumb.releasePointerCapture(e.pointerId); // Release the pointer
+                scrollbarThumb.releasePointerCapture(e.pointerId); 
                 document.body.style.cursor = 'default';
                 console.log("Scrollbar drag ended.");
             }
         });
         
-        // Update the scrollbar thumb position when the piano is scrolled programmatically
+        // --- FIX: This is the key change ---
+        // Update the scrollbar thumb position whenever the piano is scrolled, for any reason.
+        // The faulty `if` condition has been removed.
         pianoContainer.addEventListener('scroll', () => {
-            if (!isDraggingScrollbar) { // Only update if not currently dragging
-                 updateScrollbar();
-            }
+            console.log("Piano scrolled, updating thumb position.");
+            updateScrollbar();
         });
 
-        // Use ResizeObserver to update the scrollbar when the container size changes
+        // Use ResizeObserver to update the scrollbar when the container or content size changes
         new ResizeObserver(updateScrollbar).observe(pianoContainer);
         new ResizeObserver(updateScrollbar).observe(notesContainer);
 
