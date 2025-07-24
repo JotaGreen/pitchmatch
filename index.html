@@ -223,7 +223,6 @@
             return `${noteNames[noteIndex]}${octave}`;
         }
 
-        // need to convert because files in the instrument sample library use flats (b), while we use sharps (#)
         function pitchNameToFileName(pitchName) {
             if (pitchName.includes('#')) {
                 const note = pitchName.charAt(0);
@@ -430,22 +429,44 @@
         
         keysInstrumentSelect.addEventListener('change', (e) => changeKeysInstrument(e.target.value));
         secretInstrumentSelect.addEventListener('change', (e) => changeSecretInstrument(e.target.value));
-
-        window.addEventListener('pointerup', () => {
-            if (isPointerDown) {
-                isPointerDown = false;
-                const pressedKey = notesContainer.querySelector('.key.pressed');
-                if (pressedKey) {
-                    const pitchName = pressedKey.querySelector('.key-label').textContent;
-                    if (keysInstrument) {
-                        keysInstrument.triggerRelease(pitchName);
-                        pressedKey.classList.remove('pressed');
-                    }
-                }
+        
+        // --- NEW: Centralized Piano Key Interaction Logic ---
+        /**
+         * Plays the note corresponding to a given key element.
+         * @param {HTMLElement} keyElement The key element to play.
+         */
+        function attackKey(keyElement) {
+            if (!keyElement || !keysInstrument || keyElement.classList.contains('pressed') || keyElement.classList.contains('disabled')) {
+                return;
             }
-        });
+            
+            // Release any other key that might be pressed. This ensures monophonic playback during drags.
+            const currentlyPressed = notesContainer.querySelector('.key.pressed');
+            if (currentlyPressed && currentlyPressed !== keyElement) {
+                releaseKey(currentlyPressed);
+            }
+            
+            const pitchName = keyElement.querySelector('.key-label').textContent;
+            keysInstrument.triggerAttack(pitchName);
+            keyElement.classList.add('pressed');
+            console.log(`Attacked: ${pitchName}`);
+        }
 
-        // --- Piano Key Generation ---
+        /**
+         * Stops the note corresponding to a given key element.
+         * @param {HTMLElement} keyElement The key element to release.
+         */
+        function releaseKey(keyElement) {
+            if (!keyElement || !keysInstrument || !keyElement.classList.contains('pressed')) {
+                return;
+            }
+            const pitchName = keyElement.querySelector('.key-label').textContent;
+            keysInstrument.triggerRelease(pitchName);
+            keyElement.classList.remove('pressed');
+            console.log(`Released: ${pitchName}`);
+        }
+
+        // --- Piano Key Generation (Refactored) ---
         function generatePianoKeys(minKey, maxKey) {
             console.log(`Generating keys from ${minKey} to ${maxKey}`);
             notesContainer.innerHTML = ''; 
@@ -465,48 +486,15 @@
                 label.textContent = pitchName;
                 key.appendChild(label);
 
-                const attack = (event) => {
-                    if (event.pointerType === 'touch') {
-                        event.preventDefault();
-                    }
-                    
-                    const currentlyPressed = notesContainer.querySelector('.key.pressed');
-                    if (currentlyPressed && currentlyPressed !== key) {
-                        if (keysInstrument) {
-                            const oldPitch = currentlyPressed.querySelector('.key-label').textContent;
-                            keysInstrument.triggerRelease(oldPitch);
-                            currentlyPressed.classList.remove('pressed');
-                        }
-                    }
-                    
-                    if (keysInstrument && !key.classList.contains('pressed') && !key.classList.contains('disabled')) {
-                        keysInstrument.triggerAttack(pitchName);
-                        key.classList.add('pressed');
-                    }
-                };
-
-                const release = () => {
-                    if (keysInstrument && key.classList.contains('pressed')) {
-                        keysInstrument.triggerRelease(pitchName);
-                        key.classList.remove('pressed');
-                    }
-                };
-                
+                // A single 'pointerdown' listener on each key starts the interaction.
                 key.addEventListener('pointerdown', (e) => {
+                    // Prevent default touch behaviors like scrolling the page.
+                    if (e.pointerType === 'touch') {
+                        e.preventDefault();
+                    }
                     isPointerDown = true;
-                    attack(e);
-                });
-
-                key.addEventListener('pointerenter', (e) => {
-                    if (isPointerDown) {
-                        attack(e);
-                    }
-                });
-
-                key.addEventListener('pointerleave', () => {
-                    if (isPointerDown) {
-                        release();
-                    }
+                    // Attack the specific key that was pressed down.
+                    attackKey(key);
                 });
 
                 notesContainer.appendChild(key);
@@ -532,7 +520,6 @@
 
             const maxScrollLeft = scrollWidth - clientWidth;
             const maxThumbPosition = scrollbarContainer.clientWidth - thumbWidth;
-            // Prevent division by zero if maxScrollLeft is 0
             const thumbPosition = maxScrollLeft > 0 ? (pianoContainer.scrollLeft / maxScrollLeft) * maxThumbPosition : 0;
             scrollbarThumb.style.transform = `translateX(${thumbPosition}px)`;
         }
@@ -546,38 +533,74 @@
             document.body.style.cursor = 'grabbing';
             console.log("Scrollbar drag started.");
         });
+        
+        // --- NEW: Consolidated Global Pointer Handlers ---
 
         window.addEventListener('pointermove', (e) => {
-            if (!isDraggingScrollbar) return;
-            e.preventDefault(); 
+            // First, handle scrollbar dragging if it's active.
+            if (isDraggingScrollbar) {
+                e.preventDefault(); 
+                const dx = e.clientX - scrollbarStartX; 
+                const scrollWidth = pianoContainer.scrollWidth;
+                const clientWidth = pianoContainer.clientWidth;
+                if (scrollWidth <= clientWidth) return;
+                const scrollDelta = dx * (scrollWidth / clientWidth);
+                pianoContainer.scrollLeft = initialScrollLeft + scrollDelta;
+                return; // Stop here to prevent key interaction while scrolling.
+            }
 
-            const dx = e.clientX - scrollbarStartX; 
-            const scrollWidth = pianoContainer.scrollWidth;
-            const clientWidth = pianoContainer.clientWidth;
-            
-            // This check prevents the piano from scrolling if it's not actually scrollable.
-            if (scrollWidth <= clientWidth) return;
+            // If not scrolling, handle key dragging.
+            if (isPointerDown) {
+                // Find the element currently under the pointer's coordinates.
+                const elementUnderPointer = document.elementFromPoint(e.clientX, e.clientY);
+                // See if that element is a key or is inside a key.
+                const keyUnderPointer = elementUnderPointer ? elementUnderPointer.closest('.key') : null;
+                const pressedKey = notesContainer.querySelector('.key.pressed');
 
-            const scrollDelta = dx * (scrollWidth / clientWidth);
-            pianoContainer.scrollLeft = initialScrollLeft + scrollDelta;
+                // If the key under the pointer has changed, update what's playing.
+                if (keyUnderPointer !== pressedKey) {
+                    if (pressedKey) {
+                        releaseKey(pressedKey);
+                    }
+                    if (keyUnderPointer) {
+                        attackKey(keyUnderPointer);
+                    }
+                }
+            }
         });
 
         window.addEventListener('pointerup', (e) => {
+            // Handle releasing a key.
+            if (isPointerDown) {
+                console.log("Global pointer up: Releasing key.");
+                isPointerDown = false;
+                const pressedKey = notesContainer.querySelector('.key.pressed');
+                if (pressedKey) {
+                    releaseKey(pressedKey);
+                }
+            }
+
+            // Handle ending a scrollbar drag.
             if (isDraggingScrollbar) {
+                console.log("Global pointer up: Ending scrollbar drag.");
                 isDraggingScrollbar = false;
-                scrollbarThumb.releasePointerCapture(e.pointerId); 
+                try {
+                    scrollbarThumb.releasePointerCapture(e.pointerId); 
+                } catch (err) {
+                    console.warn("Could not release pointer capture. This can happen if the pointer was not captured.", err.message)
+                }
                 document.body.style.cursor = 'default';
-                console.log("Scrollbar drag ended.");
             }
         });
         
-        // Update the scrollbar thumb position whenever the piano is scrolled, for any reason.
+        // Update the scrollbar thumb position whenever the piano is scrolled.
         pianoContainer.addEventListener('scroll', () => {
-            console.log("Piano scrolled, updating thumb position.");
+            // Using a log here can be noisy, but it's good for debugging.
+            // console.log("Piano scrolled, updating thumb position.");
             updateScrollbar();
         });
 
-        // Use ResizeObserver to update the scrollbar when the container or content size changes
+        // Use ResizeObserver to update the scrollbar when the container or content size changes.
         new ResizeObserver(updateScrollbar).observe(pianoContainer);
         new ResizeObserver(updateScrollbar).observe(notesContainer);
 
