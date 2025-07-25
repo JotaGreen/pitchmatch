@@ -194,7 +194,7 @@
         let tempRandomInstrument = null;
         let currentSecretMidiNote = null;
         let minMidi, maxMidi;
-        const activePointers = new Map(); // NEW: Tracks all active pointers for multitouch.
+        const activePointers = new Map(); // Tracks all active pointers for multitouch.
         let isDraggingScrollbar = false;
         let scrollbarStartX = 0;
         let initialScrollLeft = 0;
@@ -272,24 +272,42 @@
             finally { setLoading(false); }
         }
 
+        // --- CORRECTED LOGIC: This function now ONLY changes the instrument, not the note. ---
         async function changeSecretInstrument(instrumentKey) {
             console.log(`--- Changing Secret Pitch Instrument to: ${instrumentKey} ---`);
-            if (instrumentKey !== 'random') {
-                setLoading(true);
-                try {
+            setLoading(true);
+            try {
+                if (instrumentKey === 'random') {
+                    // When switching to Random, immediately load a new random instrument
+                    // to be used with the CURRENT secret note.
+                    const instrumentKeys = Object.keys(instruments);
+                    const randomKey = instrumentKeys[Math.floor(Math.random() * instrumentKeys.length)];
+                    console.log(`Switched to Random. Loading new random instrument: ${randomKey}`);
+                    
+                    if (tempRandomInstrument) tempRandomInstrument.dispose();
+                    tempRandomInstrument = await loadInstrument(randomKey);
+                    activeSecretInstrument = tempRandomInstrument;
+
+                } else {
+                    // When switching to a specific instrument, load it.
                     if (secretPitchInstrument) secretPitchInstrument.dispose();
                     secretPitchInstrument = await loadInstrument(instrumentKey);
                     activeSecretInstrument = secretPitchInstrument;
-                } catch (error) { console.error("Failed to change secret instrument:", error); }
-                 finally { setLoading(false); }
-            } else {
-                 if (tempRandomInstrument) tempRandomInstrument.dispose();
-                 tempRandomInstrument = null;
-                 activeSecretInstrument = null; 
+                    
+                    // Dispose of the temp instrument if it exists, since we're no longer in random mode.
+                    if (tempRandomInstrument) {
+                        tempRandomInstrument.dispose();
+                        tempRandomInstrument = null;
+                    }
+                }
+            } catch (error) {
+                console.error("Failed to change secret instrument:", error);
+            } finally {
+                setLoading(false);
             }
         }
 
-        // --- App Initialization & Settings ---
+        // --- App Initialization & Settings (Corrected) ---
         startButton.addEventListener('click', async () => {
             console.log("Start button clicked. Initializing audio and app.");
             try {
@@ -303,7 +321,10 @@
                 generatePianoKeys(minMidi, maxMidi);
                 
                 await changeKeysInstrument(keysInstrumentSelect.value);
+                
+                // First, load the default secret instrument.
                 await changeSecretInstrument(secretInstrumentSelect.value);
+                // Then, explicitly set the first secret note. This was previously implicit.
                 await setNewSecretNote();
 
             } catch (error) {
@@ -383,6 +404,7 @@
             console.log(`New secret note set: ${midiToPitchName(currentSecretMidiNote)}`);
             
             if (secretInstrumentSelect.value === 'random') {
+                // If in random mode, load a NEW random instrument for the NEW note.
                 const instrumentKeys = Object.keys(instruments);
                 const randomKey = instrumentKeys[Math.floor(Math.random() * instrumentKeys.length)];
                 setLoading(true);
@@ -393,6 +415,7 @@
                 } catch (error) { console.error("Failed to load random instrument", error); }
                 finally { setLoading(false); }
             } else {
+                // If not random, just make sure the active instrument is the main one.
                 activeSecretInstrument = secretPitchInstrument;
             }
 
@@ -404,6 +427,8 @@
         const playSecretNote = () => {
             if (activeSecretInstrument) {
                 activeSecretInstrument.triggerAttack(midiToPitchName(currentSecretMidiNote));
+            } else {
+                console.warn("Play button pressed, but no active secret instrument!");
             }
         };
         const stopSecretNote = () => {
@@ -432,17 +457,10 @@
         
         // --- REFACTORED: Piano Key Logic for Multitouch ---
 
-        /**
-         * Plays the note for a key, tracking multiple presses.
-         * @param {HTMLElement} keyElement The key element to play.
-         */
         function attackKey(keyElement) {
             if (!keyElement || !keysInstrument || keyElement.classList.contains('disabled')) return;
-
             const pressCount = (parseInt(keyElement.dataset.pressCount) || 0) + 1;
             keyElement.dataset.pressCount = pressCount;
-
-            // Only trigger the sound and add the class on the *first* press.
             if (pressCount === 1) {
                 const pitchName = keyElement.querySelector('.key-label').textContent;
                 keysInstrument.triggerAttack(pitchName);
@@ -451,17 +469,10 @@
             }
         }
 
-        /**
-         * Stops the note for a key, tracking multiple presses.
-         * @param {HTMLElement} keyElement The key element to release.
-         */
         function releaseKey(keyElement) {
             if (!keyElement || !keysInstrument) return;
-
             const pressCount = (parseInt(keyElement.dataset.pressCount) || 1) - 1;
             keyElement.dataset.pressCount = pressCount;
-
-            // Only release the sound and remove class when the *last* pointer is lifted.
             if (pressCount === 0) {
                 if (keyElement.classList.contains('pressed')) {
                     const pitchName = keyElement.querySelector('.key-label').textContent;
@@ -469,7 +480,7 @@
                     keyElement.classList.remove('pressed');
                     console.log(`Released: ${pitchName} (Last press)`);
                 }
-                delete keyElement.dataset.pressCount; // Clean up attribute
+                delete keyElement.dataset.pressCount;
             }
         }
 
@@ -493,17 +504,13 @@
                 label.textContent = pitchName;
                 key.appendChild(label);
 
-                // This listener starts the interaction for a single pointer.
                 key.addEventListener('pointerdown', (e) => {
                     if (e.pointerType === 'touch') e.preventDefault();
-                    
-                    // Capture the pointer to ensure we get 'pointerup' even if it moves off-screen.
                     try {
                         e.target.setPointerCapture(e.pointerId);
                     } catch (err) {
                         console.warn("Pointer capture failed.", err);
                     }
-
                     const keyElement = e.target.closest('.key');
                     if (keyElement) {
                         attackKey(keyElement);
@@ -511,7 +518,6 @@
                         console.log(`Pointer ${e.pointerId} DOWN. Active pointers: ${activePointers.size}`);
                     }
                 });
-
                 notesContainer.appendChild(key);
             }
             setTimeout(updateScrollbar, 0);
@@ -551,7 +557,6 @@
         // --- REWRITTEN: Global Pointer Handlers for Multitouch ---
 
         window.addEventListener('pointermove', (e) => {
-            // Handle scrollbar dragging first, as it's an exclusive action.
             if (isDraggingScrollbar) {
                 e.preventDefault(); 
                 const dx = e.clientX - scrollbarStartX; 
@@ -563,26 +568,19 @@
                 return;
             }
 
-            // If this pointer isn't tracked for key presses, ignore it.
             if (!activePointers.has(e.pointerId)) return;
-
             const keyUnderPointer = document.elementFromPoint(e.clientX, e.clientY)?.closest('.key');
             const previousKey = activePointers.get(e.pointerId);
 
             if (keyUnderPointer !== previousKey) {
-                // The pointer has moved to a new key or off a key.
                 if (previousKey) releaseKey(previousKey);
                 if (keyUnderPointer) attackKey(keyUnderPointer);
-                
-                // Update the map to track the new key for this pointer.
                 activePointers.set(e.pointerId, keyUnderPointer);
             }
         });
 
-        // Listen for both 'up' and 'cancel' to end a touch interaction.
         ['pointerup', 'pointercancel'].forEach(eventName => {
             window.addEventListener(eventName, (e) => {
-                // Handle ending a scrollbar drag.
                 if (isDraggingScrollbar && e.type === 'pointerup') {
                     isDraggingScrollbar = false;
                     try {
@@ -594,7 +592,6 @@
                     console.log("Scrollbar drag ended.");
                 }
 
-                // Handle releasing a key from a specific pointer.
                 if (activePointers.has(e.pointerId)) {
                     const keyToRelease = activePointers.get(e.pointerId);
                     if (keyToRelease) {
